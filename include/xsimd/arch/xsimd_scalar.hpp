@@ -13,6 +13,7 @@
 #define XSIMD_SCALAR_HPP
 
 #include "../config/xsimd_macros.hpp"
+#include "common/xsimd_common_trigo.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -33,7 +34,6 @@
 namespace xsimd
 {
     using std::abs;
-
     using std::acos;
     using std::acosh;
     using std::arg;
@@ -46,8 +46,6 @@ namespace xsimd
     using std::ceil;
     using std::conj;
     using std::copysign;
-    using std::cos;
-    using std::cosh;
     using std::erf;
     using std::erfc;
     using std::exp;
@@ -75,8 +73,6 @@ namespace xsimd
     using std::remainder;
     using std::rint;
     using std::round;
-    using std::sin;
-    using std::sinh;
     using std::sqrt;
     using std::tan;
     using std::tanh;
@@ -639,10 +635,10 @@ namespace xsimd
         XSIMD_INLINE C expm1_complex_scalar_impl(const C& val) noexcept
         {
             using T = typename C::value_type;
-            T isin = std::sin(val.imag());
+            T isin = xsimd::sin(val.imag());
             T rem1 = std::expm1(val.real());
             T re = rem1 + T(1.);
-            T si = std::sin(val.imag() * T(0.5));
+            T si = xsimd::sin(val.imag() * T(0.5));
             return std::complex<T>(rem1 - T(2.) * re * si * si, re * isin);
         }
     }
@@ -1079,98 +1075,11 @@ namespace xsimd
     }
 #endif
 
-    namespace detail
-    {
-#define XSIMD_HASSINCOS_TRAIT(func)                                                                                                           \
-    template <class S>                                                                                                                        \
-    struct has##func                                                                                                                          \
-    {                                                                                                                                         \
-        template <class T>                                                                                                                    \
-        static XSIMD_INLINE auto get(T* ptr) -> decltype(func(std::declval<T>(), std::declval<T*>(), std::declval<T*>()), std::true_type {}); \
-        static XSIMD_INLINE std::false_type get(...);                                                                                         \
-        static constexpr bool value = decltype(get((S*)nullptr))::value;                                                                      \
-    }
-
-#define XSIMD_HASSINCOS(func, T) has##func<T>::value
-
-        XSIMD_HASSINCOS_TRAIT(sincos);
-        XSIMD_HASSINCOS_TRAIT(sincosf);
-        XSIMD_HASSINCOS_TRAIT(__sincos);
-        XSIMD_HASSINCOS_TRAIT(__sincosf);
-
-        struct common_sincosf
-        {
-            template <class T>
-            XSIMD_INLINE std::enable_if_t<XSIMD_HASSINCOS(sincosf, T)>
-            operator()(float val, T& s, T& c)
-            {
-                sincosf(val, &s, &c);
-            }
-
-            template <class T>
-            XSIMD_INLINE std::enable_if_t<!XSIMD_HASSINCOS(sincosf, T) && XSIMD_HASSINCOS(__sincosf, T)>
-            operator()(float val, T& s, T& c)
-            {
-                __sincosf(val, &s, &c);
-            }
-
-            template <class T>
-            XSIMD_INLINE std::enable_if_t<!XSIMD_HASSINCOS(sincosf, T) && !XSIMD_HASSINCOS(__sincosf, T)>
-            operator()(float val, T& s, T& c)
-            {
-                s = std::sin(val);
-                c = std::cos(val);
-            }
-        };
-
-        struct common_sincos
-        {
-            template <class T>
-            XSIMD_INLINE std::enable_if_t<XSIMD_HASSINCOS(sincos, T)>
-            operator()(double val, T& s, T& c)
-            {
-                sincos(val, &s, &c);
-            }
-
-            template <class T>
-            XSIMD_INLINE std::enable_if_t<!XSIMD_HASSINCOS(sincos, T) && XSIMD_HASSINCOS(__sincos, T)>
-            operator()(double val, T& s, T& c)
-            {
-                __sincos(val, &s, &c);
-            }
-
-            template <class T>
-            XSIMD_INLINE std::enable_if_t<!XSIMD_HASSINCOS(sincos, T) && !XSIMD_HASSINCOS(__sincos, T)>
-            operator()(double val, T& s, T& c)
-            {
-                s = std::sin(val);
-                c = std::cos(val);
-            }
-        };
-
-#undef XSIMD_HASSINCOS_TRAIT
-#undef XSIMD_HASSINCOS
-    }
-
-    XSIMD_INLINE std::pair<float, float> sincos(float val) noexcept
-    {
-        float s, c;
-        detail::common_sincosf {}(val, s, c);
-        return std::make_pair(s, c);
-    }
-
-    XSIMD_INLINE std::pair<double, double> sincos(double val) noexcept
-    {
-        double s, c;
-        detail::common_sincos {}(val, s, c);
-        return std::make_pair(s, c);
-    }
-
     template <class T>
     XSIMD_INLINE std::pair<std::complex<T>, std::complex<T>>
     sincos(const std::complex<T>& val) noexcept
     {
-        return std::make_pair(std::sin(val), std::cos(val));
+        return std::make_pair(xsimd::sin(val), xsimd::cos(val));
     }
 
 #ifdef XSIMD_ENABLE_XTL_COMPLEX

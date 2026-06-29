@@ -15,6 +15,7 @@
 #include "./xsimd_common_details.hpp"
 
 #include <array>
+#include <complex>
 
 namespace xsimd
 {
@@ -991,6 +992,377 @@ namespace xsimd
 
     }
 
-}
+    namespace detail
+    {
+        template <class T>
+        XSIMD_INLINE T horner_scalar(T) noexcept
+        {
+            return T(0.);
+        }
 
+        template <class T, uint64_t c0>
+        XSIMD_INLINE T horner_scalar(T) noexcept
+        {
+            return ::xsimd::bit_cast<T>(static_cast<::xsimd::as_unsigned_integer_t<T>>(c0));
+        }
+
+        template <class T, uint64_t c0, uint64_t c1, uint64_t... args>
+        XSIMD_INLINE T horner_scalar(T x) noexcept
+        {
+            return std::fma(x, horner_scalar<T, c1, args...>(x), ::xsimd::bit_cast<T>(static_cast<::xsimd::as_unsigned_integer_t<T>>(c0)));
+        }
+
+        XSIMD_INLINE float scalar_cos_eval(float z) noexcept
+        {
+            float y = horner_scalar<float,
+                                     0x3d2aaaa5,
+                                     0xbab60619,
+                                     0x37ccf5ce>(z);
+            return 1.f + std::fma(z, -0.5f, y * z * z);
+        }
+
+        XSIMD_INLINE float scalar_sin_eval(float z, float x) noexcept
+        {
+            float y = horner_scalar<float,
+                                    0xbe2aaaa2,
+                                    0x3c08839d,
+                                    0xb94ca1f9>(z);
+            return std::fma(y * z, x, x);
+        }
+
+        XSIMD_INLINE double scalar_cos_eval(double z) noexcept
+        {
+            double y = horner_scalar<double,
+                                     0x3fe0000000000000ull,
+                                     0xbfa5555555555551ull,
+                                     0x3f56c16c16c15d47ull,
+                                     0xbefa01a019ddbcd9ull,
+                                     0x3e927e4f8e06d9a5ull,
+                                     0xbe21eea7c1e514d4ull,
+                                     0x3da8ff831ad9b219ull>(z);
+            return 1. - y * z;
+        }
+
+        XSIMD_INLINE double scalar_sin_eval(double z, double x) noexcept
+        {
+            double y = horner_scalar<double,
+                                     0xbfc5555555555548ull,
+                                     0x3f8111111110f7d0ull,
+                                     0xbf2a01a019bfdf03ull,
+                                     0x3ec71de3567d4896ull,
+                                     0xbe5ae5e5a9291691ull,
+                                     0x3de5d8fd1fcf0ec1ull>(z);
+            return std::fma(y * z, x, x);
+        }
+
+        template <class T>
+        XSIMD_INLINE T trigo_reduce_scalar(T x, int& quadrant) noexcept;
+
+        template <>
+        XSIMD_INLINE float trigo_reduce_scalar<float>(float x, int& quadrant) noexcept
+        {
+            namespace tc = xsimd::constants;
+
+            if (x <= tc::pio4<float>())
+            {
+                quadrant = 0;
+                return x;
+            }
+            else if (x <= tc::pio2<float>())
+            {
+                quadrant = (x > tc::pio4<float>()) ? 1 : 0;
+                float xr = x - tc::pio2_1<float>();
+                xr -= tc::pio2_2<float>();
+                xr -= tc::pio2_3<float>();
+                return quadrant ? xr : x;
+            }
+            else if (x <= tc::twentypi<float>())
+            {
+                float xi = std::nearbyint(x * tc::twoopi<float>());
+                float xr = std::fma(-xi, tc::pio2_1<float>(), x);
+                xr -= xi * tc::pio2_2<float>();
+                xr -= xi * tc::pio2_3<float>();
+                int n = static_cast<int>(xi);
+                quadrant = n & 3;
+                return xr;
+            }
+            else if (x <= tc::mediumpi<float>())
+            {
+                float fn = std::nearbyint(x * tc::twoopi<float>());
+                float r = x - fn * tc::pio2_1<float>();
+                float w = fn * tc::pio2_1t<float>();
+                float t = r;
+                w = fn * tc::pio2_2<float>();
+                r = t - w;
+                w = fn * tc::pio2_2t<float>() - ((t - r) - w);
+                t = r;
+                w = fn * tc::pio2_3<float>();
+                r = t - w;
+                w = fn * tc::pio2_3t<float>() - ((t - r) - w);
+                float xr = r - w;
+                int n = static_cast<int>(fn);
+                quadrant = n & 3;
+                return xr;
+            }
+            else
+            {
+                double y[2];
+                std::int32_t n = ::xsimd::detail::__ieee754_rem_pio2(static_cast<double>(x), y);
+                quadrant = n & 3;
+                return static_cast<float>(y[0]);
+            }
+        }
+
+        template <>
+        XSIMD_INLINE double trigo_reduce_scalar<double>(double x, int& quadrant) noexcept
+        {
+            namespace tc = xsimd::constants;
+
+            if (x <= tc::pio4<double>())
+            {
+                quadrant = 0;
+                return x;
+            }
+            else if (x <= tc::pio2<double>())
+            {
+                quadrant = (x > tc::pio4<double>()) ? 1 : 0;
+                double xr = x - tc::pio2_1<double>();
+                xr -= tc::pio2_2<double>();
+                xr -= tc::pio2_3<double>();
+                return quadrant ? xr : x;
+            }
+            else if (x <= tc::twentypi<double>())
+            {
+                double xi = std::nearbyint(x * tc::twoopi<double>());
+                double xr = std::fma(-xi, tc::pio2_1<double>(), x);
+                xr -= xi * tc::pio2_2<double>();
+                xr -= xi * tc::pio2_3<double>();
+                int n = static_cast<int>(xi);
+                quadrant = n & 3;
+                return xr;
+            }
+            else if (x <= tc::mediumpi<double>())
+            {
+                double fn = std::nearbyint(x * tc::twoopi<double>());
+                double r = x - fn * tc::pio2_1<double>();
+                double w = fn * tc::pio2_1t<double>();
+                double t = r;
+                w = fn * tc::pio2_2<double>();
+                r = t - w;
+                w = fn * tc::pio2_2t<double>() - ((t - r) - w);
+                t = r;
+                w = fn * tc::pio2_3<double>();
+                r = t - w;
+                w = fn * tc::pio2_3t<double>() - ((t - r) - w);
+                double xr = r - w;
+                int n = static_cast<int>(fn);
+                quadrant = n & 3;
+                return xr;
+            }
+            else
+            {
+                double y[2];
+                std::int32_t n = ::xsimd::detail::__ieee754_rem_pio2(x, y);
+                quadrant = n & 3;
+                return y[0];
+            }
+        }
+
+        template <class T>
+        XSIMD_INLINE std::pair<T, T> scalar_sincos_impl(T val) noexcept
+        {
+            T x = std::fabs(val);
+            int quadrant = 0;
+            T xr = trigo_reduce_scalar<T>(x, quadrant);
+
+            T tmp = (quadrant >= 2) ? T(1.) : T(0.);
+            int swap_bit = quadrant - static_cast<int>(2.f * tmp);
+            T signmask = ::xsimd::bit_cast<T>(static_cast<::xsimd::as_unsigned_integer_t<T>>(
+                sizeof(T) == sizeof(float) ? uint32_t(0x80000000u) : uint64_t(0x8000000000000000ull)));
+
+            T z = xr * xr;
+            T se = scalar_sin_eval(z, xr);
+            T ce = scalar_cos_eval(z);
+
+            T sin_sign = ::xsimd::bitwise_xor(::xsimd::bitwise_and(val, signmask), (tmp != T(0.) ? signmask : T(0.)));
+            T cos_sign = ((swap_bit ^ static_cast<int>(tmp)) != 0) ? signmask : T(0.);
+
+            T sin_res = (swap_bit == 0) ? se : ce;
+            T cos_res = (swap_bit != 0) ? se : ce;
+
+            sin_res = ::xsimd::bitwise_xor(sin_res, sin_sign);
+            cos_res = ::xsimd::bitwise_xor(cos_res, cos_sign);
+            return std::make_pair(sin_res, cos_res);
+        }
+    }
+
+    XSIMD_INLINE float sin(float val) noexcept
+    {
+        return detail::scalar_sincos_impl<float>(val).first;
+    }
+
+    XSIMD_INLINE double sin(double val) noexcept
+    {
+        return detail::scalar_sincos_impl<double>(val).first;
+    }
+
+    XSIMD_INLINE float cos(float val) noexcept
+    {
+        return detail::scalar_sincos_impl<float>(val).second;
+    }
+
+    XSIMD_INLINE double cos(double val) noexcept
+    {
+        return detail::scalar_sincos_impl<double>(val).second;
+    }
+
+    XSIMD_INLINE std::pair<float, float> sincos(float val) noexcept
+    {
+        return detail::scalar_sincos_impl<float>(val);
+    }
+
+    XSIMD_INLINE std::pair<double, double> sincos(double val) noexcept
+    {
+        return detail::scalar_sincos_impl<double>(val);
+    }
+
+    namespace detail
+    {
+        template <class T>
+        XSIMD_INLINE T horner1_scalar(T x) noexcept
+        {
+            return T(1.);
+        }
+
+        template <class T, uint64_t c0>
+        XSIMD_INLINE T horner1_scalar(T x) noexcept
+        {
+            return x + ::xsimd::bit_cast<T>(static_cast<::xsimd::as_unsigned_integer_t<T>>(c0));
+        }
+
+        template <class T, uint64_t c0, uint64_t c1, uint64_t... args>
+        XSIMD_INLINE T horner1_scalar(T x) noexcept
+        {
+            return std::fma(x, horner1_scalar<T, c1, args...>(x), ::xsimd::bit_cast<T>(static_cast<::xsimd::as_unsigned_integer_t<T>>(c0)));
+        }
+
+        XSIMD_INLINE float scalar_sinh_kernel(float x) noexcept
+        {
+            float sqr = x * x;
+            float p = horner_scalar<float,
+                                     0x3f800000,
+                                     0x3e2aaacc,
+                                     0x3c087bbe,
+                                     0x39559e2f>(sqr);
+            return p * x;
+        }
+
+        XSIMD_INLINE double scalar_sinh_kernel(double x) noexcept
+        {
+            double sqr = x * x;
+            double num = horner_scalar<double,
+                                       0xc115782bdbf6ab05ull,
+                                       0xc0c694b8c71d6182ull,
+                                       0xc064773a398ff4feull,
+                                       0xbfe9435fe8bb3cd6ull>(sqr);
+            double den = horner1_scalar<double,
+                                        0xc1401a20e4f90044ull,
+                                        0x40e1a7ba7ed72245ull,
+                                        0xc0715b6096e96484ull>(sqr);
+            return std::fma(x, (num / den) * sqr, x);
+        }
+
+        template <class T>
+        XSIMD_INLINE T scalar_sinh_impl(T val) noexcept
+        {
+            namespace tc = xsimd::constants;
+            T x = std::fabs(val);
+            T r;
+            if (x < T(1.))
+            {
+                r = scalar_sinh_kernel(x);
+            }
+            else if (x > tc::maxlog<T>() - tc::log_2<T>())
+            {
+                T half_x = x * T(0.5);
+                T tmp = std::exp(half_x);
+                r = T(0.5) * tmp * tmp;
+            }
+            else
+            {
+                T tmp = std::exp(x);
+                r = T(0.5) * tmp - T(0.5) / tmp;
+            }
+            T signmask = ::xsimd::bit_cast<T>(static_cast<::xsimd::as_unsigned_integer_t<T>>(
+                sizeof(T) == sizeof(float) ? uint32_t(0x80000000u) : uint64_t(0x8000000000000000ull)));
+            return ::xsimd::bitwise_xor(r, ::xsimd::bitwise_and(val, signmask));
+        }
+
+        template <class T>
+        XSIMD_INLINE T scalar_cosh_impl(T val) noexcept
+        {
+            namespace tc = xsimd::constants;
+            T x = std::fabs(val);
+            if (x > tc::maxlog<T>() - tc::log_2<T>())
+            {
+                T half_x = x * T(0.5);
+                T tmp = std::exp(half_x);
+                return T(0.5) * tmp * tmp;
+            }
+            else
+            {
+                T tmp = std::exp(x);
+                return T(0.5) * (tmp + T(1.) / tmp);
+            }
+        }
+    }
+
+    XSIMD_INLINE float sinh(float val) noexcept
+    {
+        return detail::scalar_sinh_impl(val);
+    }
+
+    XSIMD_INLINE double sinh(double val) noexcept
+    {
+        return detail::scalar_sinh_impl(val);
+    }
+
+    XSIMD_INLINE float cosh(float val) noexcept
+    {
+        return detail::scalar_cosh_impl(val);
+    }
+
+    XSIMD_INLINE double cosh(double val) noexcept
+    {
+        return detail::scalar_cosh_impl(val);
+    }
+
+    template <class T>
+    XSIMD_INLINE std::complex<T> sin(const std::complex<T>& z) noexcept
+    {
+        return std::complex<T>(sin(z.real()) * cosh(z.imag()),
+                               cos(z.real()) * sinh(z.imag()));
+    }
+
+    template <class T>
+    XSIMD_INLINE std::complex<T> cos(const std::complex<T>& z) noexcept
+    {
+        return std::complex<T>(cos(z.real()) * cosh(z.imag()),
+                               -sin(z.real()) * sinh(z.imag()));
+    }
+
+    template <class T>
+    XSIMD_INLINE std::complex<T> sinh(const std::complex<T>& z) noexcept
+    {
+        return std::complex<T>(sinh(z.real()) * cos(z.imag()),
+                               cosh(z.real()) * sin(z.imag()));
+    }
+
+    template <class T>
+    XSIMD_INLINE std::complex<T> cosh(const std::complex<T>& z) noexcept
+    {
+        return std::complex<T>(cosh(z.real()) * cos(z.imag()),
+                               sinh(z.real()) * sin(z.imag()));
+    }
+}
 #endif
