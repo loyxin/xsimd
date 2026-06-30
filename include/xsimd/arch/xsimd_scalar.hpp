@@ -34,12 +34,7 @@
 namespace xsimd
 {
     using std::abs;
-    using std::acos;
-    using std::acosh;
     using std::arg;
-    using std::asin;
-    using std::asinh;
-    using std::atan;
     using std::atan2;
     using std::atanh;
     using std::cbrt;
@@ -74,7 +69,6 @@ namespace xsimd
     using std::rint;
     using std::round;
     using std::sqrt;
-    using std::tan;
     using std::tanh;
     using std::tgamma;
     using std::trunc;

@@ -16,6 +16,8 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <cstdint>
+#include <cstring>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -420,6 +422,17 @@ namespace detail
     StringContextScope make_context_info(const char* name, const T& val)
     {
         return StringContextScope(std::string(name) + ":" + to_string_full_precision(val));
+    }
+
+    template <class T>
+    bool bit_equal(T a, T b) noexcept
+    {
+        static_assert(std::is_floating_point<T>::value, "T must be floating point");
+        std::uint8_t bytes_a[sizeof(T)];
+        std::uint8_t bytes_b[sizeof(T)];
+        std::memcpy(bytes_a, &a, sizeof(T));
+        std::memcpy(bytes_b, &b, sizeof(T));
+        return std::memcmp(bytes_a, bytes_b, sizeof(T)) == 0;
     }
 }
 
