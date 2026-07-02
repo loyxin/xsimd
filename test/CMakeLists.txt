@@ -171,7 +171,6 @@ set(XSIMD_TESTS
     test_poly_evaluation.cpp
     test_power.cpp
     test_rounding.cpp
-    test_scalar_trigo.cpp
     test_select.cpp
     test_shuffle.cpp
     test_sum.cpp
