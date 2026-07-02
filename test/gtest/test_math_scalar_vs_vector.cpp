@@ -17,6 +17,19 @@
 #include <random>
 #include <vector>
 
+// ARCH_SUFFIX is defined by CMake (e.g. AVX2, AVX512) to produce
+// distinct test-suite names so that the two arch variants don't collide.
+#ifndef ARCH_SUFFIX
+#define ARCH_SUFFIX Default
+#endif
+
+// Token-pasting helpers to build the test-suite name.
+// The double-indirection (XS_SV_CONCAT2 -> XS_SV_CONCAT1) is required so that
+// ARCH_SUFFIX is fully expanded before the ## operator is applied.
+#define XS_SV_CONCAT1(a, b) a##_##b
+#define XS_SV_CONCAT2(a, b) XS_SV_CONCAT1(a, b)
+#define XS_SV_SUITE        XS_SV_CONCAT2(ScalarVsVector, ARCH_SUFFIX)
+
 namespace
 {
 
@@ -78,38 +91,38 @@ namespace
 
 // ========== Unary functions ==========
 
-TEST(ScalarVsVector, Ceil)
+TEST(XS_SV_SUITE, Ceil)
 {
     expect_eq_vec([](float x)
                   { return xsimd::ceil(x); }, [](auto b)
                   { return xsimd::ceil(b); });
 }
-TEST(ScalarVsVector, Floor)
+TEST(XS_SV_SUITE, Floor)
 {
     expect_eq_vec([](float x)
                   { return xsimd::floor(x); }, [](auto b)
                   { return xsimd::floor(b); });
 }
-TEST(ScalarVsVector, Trunc)
+TEST(XS_SV_SUITE, Trunc)
 {
     expect_eq_vec([](float x)
                   { return xsimd::trunc(x); }, [](auto b)
                   { return xsimd::trunc(b); });
 }
-TEST(ScalarVsVector, Round)
+TEST(XS_SV_SUITE, Round)
 {
     expect_eq_vec([](float x)
                   { return xsimd::round(x); }, [](auto b)
                   { return xsimd::round(b); });
 }
 
-TEST(ScalarVsVector, Abs)
+TEST(XS_SV_SUITE, Abs)
 {
     expect_eq_vec([](float x)
                   { return xsimd::abs(x); }, [](auto b)
                   { return xsimd::abs(b); });
 }
-TEST(ScalarVsVector, Fabs)
+TEST(XS_SV_SUITE, Fabs)
 {
     expect_eq_vec([](float x)
                   { return xsimd::fabs(x); }, [](auto b)
@@ -117,7 +130,7 @@ TEST(ScalarVsVector, Fabs)
 }
 
 // Sqrt needs a non-negative input range.
-TEST(ScalarVsVector, Sqrt)
+TEST(XS_SV_SUITE, Sqrt)
 {
     constexpr std::size_t S = xsimd::batch<float>::size;
     auto in = gen_real(0.001f, 10000.0f, N);
@@ -134,21 +147,21 @@ TEST(ScalarVsVector, Sqrt)
 
 // ========== Binary functions ==========
 
-TEST(ScalarVsVector, Fmod)
+TEST(XS_SV_SUITE, Fmod)
 {
     expect_eq_vec2([](float x, float y)
                    { return xsimd::fmod(x, y); },
                    [](auto bx, auto by)
                    { return xsimd::fmod(bx, by); });
 }
-TEST(ScalarVsVector, Fmax)
+TEST(XS_SV_SUITE, Fmax)
 {
     expect_eq_vec2([](float x, float y)
                    { return xsimd::fmax(x, y); },
                    [](auto bx, auto by)
                    { return xsimd::fmax(bx, by); });
 }
-TEST(ScalarVsVector, Fmin)
+TEST(XS_SV_SUITE, Fmin)
 {
     expect_eq_vec2([](float x, float y)
                    { return xsimd::fmin(x, y); },
@@ -158,7 +171,7 @@ TEST(ScalarVsVector, Fmin)
 
 // ========== Ternary function: fma ==========
 
-TEST(ScalarVsVector, Fma)
+TEST(XS_SV_SUITE, Fma)
 {
     constexpr std::size_t S = xsimd::batch<float>::size;
     auto a = gen_real(-100.0f, 100.0f, N);

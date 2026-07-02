@@ -177,6 +177,20 @@ namespace xsimd
     /**
      * @ingroup batch_trigo
      *
+     * Computes the arc cotangent of the batch \c x.
+     * @param x batch of floating point values.
+     * @return the arc cotangent of \c x.
+     */
+    template <class T, class A>
+    XSIMD_INLINE batch<T, A> acot(batch<T, A> const& x) noexcept
+    {
+        detail::static_check_supported_config<T, A>();
+        return kernel::acot<A>(x, A {});
+    }
+
+    /**
+     * @ingroup batch_trigo
+     *
      * Computes the arc tangent of the batch \c x/y, using the signs of the
      * arguments to determine the correct quadrant.
      * @param x batch of floating point values.
@@ -2791,6 +2805,20 @@ namespace xsimd
     {
         detail::static_check_supported_config<T, A>();
         return kernel::tan<A>(x, A {});
+    }
+
+    /**
+     * @ingroup batch_trigo
+     *
+     * Computes the cotangent of the batch \c x.
+     * @param x batch of floating point values.
+     * @return the cotangent of \c x.
+     */
+    template <class T, class A>
+    XSIMD_INLINE batch<T, A> cot(batch<T, A> const& x) noexcept
+    {
+        detail::static_check_supported_config<T, A>();
+        return kernel::cot<A>(x, A {});
     }
 
     /**

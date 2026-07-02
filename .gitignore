@@ -35,6 +35,7 @@
 
 # Build folder
 build/
+build*/
 
 # Documentation build artefacts
 docs/CMakeCache.txt

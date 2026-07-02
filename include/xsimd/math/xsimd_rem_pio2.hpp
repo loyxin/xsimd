@@ -9,6 +9,9 @@
  * The full license is in the file LICENSE, distributed with this software. *
  ****************************************************************************/
 
+#ifndef XSIMD_REM_PIO2_HPP
+#define XSIMD_REM_PIO2_HPP
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -705,3 +708,5 @@ namespace xsimd
 #undef LOW_WORD_IDX
 #undef ONCE0
 }
+
+#endif

@@ -39,6 +39,7 @@ target_include_directories(xsimd INTERFACE
 
 OPTION(ENABLE_XTL_COMPLEX "enables support for xcomplex defined in xtl" OFF)
 OPTION(BUILD_TESTS "xsimd test suite" OFF)
+OPTION(BUILD_GTEST "xsimd gtest suite" ON)
 
 target_compile_features(xsimd INTERFACE cxx_std_14)
 if(ENABLE_XTL_COMPLEX)
@@ -50,6 +51,11 @@ endif()
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(test)
+endif()
+
+if(BUILD_GTEST)
+    enable_testing()
+    add_subdirectory(test/gtest)
 endif()
 
 OPTION(BUILD_BENCHMARK "xsimd benchmarks" OFF)
