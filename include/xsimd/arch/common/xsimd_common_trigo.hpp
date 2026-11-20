@@ -302,20 +302,37 @@ namespace xsimd
             using real_batch = typename batch_type::real_batch;
             real_batch x = z.real();
             real_batch y = z.imag();
+            real_batch two_x = 2. * x;
+            kernel::detail::reassociation_barrier(two_x, "complex atan 2x");
             real_batch x2 = x * x;
+            kernel::detail::reassociation_barrier(x2, "complex atan x*x");
             real_batch one(1.);
-            real_batch a = one - x2 - (y * y);
-            real_batch w = 0.5 * atan2(2. * x, a);
+            real_batch y2 = y * y;
+            kernel::detail::reassociation_barrier(y2, "complex atan y*y");
+            real_batch a = one - x2 - y2;
+            kernel::detail::reassociation_barrier(a, "complex atan a");
+            real_batch w = 0.5 * atan2(two_x, a);
+            kernel::detail::reassociation_barrier(w, "complex atan w");
             real_batch num = y + one;
-            num = x2 + num * num;
+            kernel::detail::reassociation_barrier(num, "complex atan num");
+            num = fma(num, num, x2);
+            kernel::detail::reassociation_barrier(num, "complex atan num");
             real_batch den = y - one;
-            den = x2 + den * den;
+            kernel::detail::reassociation_barrier(den, "complex atan den");
+            den = fma(den, den, x2);
+            kernel::detail::reassociation_barrier(den, "complex atan den");
+            real_batch nd = num / den;
+            kernel::detail::reassociation_barrier(nd, "complex atan num/den");
+            real_batch lnd = log(nd);
+            kernel::detail::reassociation_barrier(lnd, "complex atan log(num/den)");
+            real_batch imag = 0.25 * lnd;
+            kernel::detail::reassociation_barrier(imag, "complex atan imag");
 #ifdef __FAST_MATH__
-            return batch_type(w, 0.25 * log(num / den));
+            return batch_type(w, imag);
 #else
             return select((x == real_batch(0.)) && (y == real_batch(1.)),
                           batch_type(real_batch(0.), constants::infinity<real_batch>()),
-                          batch_type(w, 0.25 * log(num / den)));
+                          batch_type(w, imag));
 #endif
         }
 

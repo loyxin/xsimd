@@ -174,6 +174,18 @@ namespace xsimd
 #endif
             }
 
+            // complex batches keep two real registers; barrier both halves so
+            // the compiler cannot contract across the barrier either.
+            template <class T, class A>
+            XSIMD_INLINE void reassociation_barrier(batch<std::complex<T>, A>& b, const char* reason) noexcept
+            {
+                auto re = b.real();
+                auto im = b.imag();
+                reassociation_barrier(re, reason);
+                reassociation_barrier(im, reason);
+                b = batch<std::complex<T>, A>(re, im);
+            }
+
             template <class F, class A, class T, class... Batches>
             XSIMD_INLINE batch<T, A> apply(F&& func, batch<T, A> const& self, batch<T, A> const& other) noexcept
             {

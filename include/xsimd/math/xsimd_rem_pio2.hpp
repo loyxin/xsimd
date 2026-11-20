@@ -9,6 +9,11 @@
  * The full license is in the file LICENSE, distributed with this software. *
  ****************************************************************************/
 
+#ifndef XSIMD_REM_PIO2_HPP
+#define XSIMD_REM_PIO2_HPP
+
+#include "../types/xsimd_utils.hpp"
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -98,6 +103,104 @@ namespace xsimd
     }                                                           \
     ONCE0                                                       \
     /**/
+
+        /*
+         * Local, libm-free replacements for the fdlibm helpers used by
+         * __kernel_rem_pio2 below. scalbn and floor are exactly specified
+         * (pure bit / IEEE-754 operations), so these vendored versions
+         * (from fdlibm s_scalbn.c and s_floor.c) return bit-identical
+         * results to the libm ones while pulling in no libm symbol.
+         */
+        XSIMD_INLINE double rem_pio2_scalbn(double x, int32_t n) noexcept
+        {
+            static const double
+                two53 = 9007199254740992.0e0, /* 0x43400000, 0x00000000 */
+                twom54 = 5.55111512312578270212e-17, /* 0x3C900000, 0x00000000 */
+                huge = 1.0e+300,
+                tiny = 1.0e-300;
+
+            int32_t k, hx, lx;
+            GET_HIGH_WORD(hx, x);
+            GET_LOW_WORD(lx, x);
+            k = (hx & 0x7ff00000) >> 20; /* extract exponent */
+            if (k == 0)
+            { /* 0 or subnormal x */
+                if ((lx | (hx & 0x7fffffff)) == 0)
+                    return x; /* +-0 */
+                x *= two53;
+                GET_HIGH_WORD(hx, x);
+                k = ((hx & 0x7ff00000) >> 20) - 53;
+            }
+            if (k == 0x7ff)
+                return x + x; /* NaN or Inf */
+            k = k + n;
+            if (k > 0x7fe)
+                return huge * x; /* overflow */
+            if (k > 0)
+            { /* normal result */
+                SET_HIGH_WORD(x, (hx & 0x800fffff) | (k << 20));
+                return x;
+            }
+            if (k <= -54)
+                return tiny * x; /* underflow */
+            n = -k; /* subnormal result */
+            k = 54 - n; /* 54 >= n > 0 */
+            SET_HIGH_WORD(x, (hx & 0x800fffff) | (k << 20));
+            return x * twom54;
+        }
+
+        XSIMD_INLINE double rem_pio2_floor(double x) noexcept
+        {
+            int32_t i0, i1, j0;
+            std::uint32_t i, j;
+            GET_HIGH_WORD(i0, x);
+            GET_LOW_WORD(i1, x);
+            j0 = ((i0 >> 20) & 0x7ff) - 0x3ff;
+            if (j0 < 20)
+            {
+                if (j0 < 0)
+                { /* |x| < 1: 0*sign(x), or -1 for negative nonzero */
+                    if (i0 >= 0)
+                    {
+                        i0 = i1 = 0;
+                    }
+                    else if (((i0 & 0x7fffffff) | i1) != 0)
+                    {
+                        i0 = 0xbff00000;
+                        i1 = 0;
+                    }
+                }
+                else
+                {
+                    i = (0x000fffff) >> j0;
+                    if (((i0 & i) | i1) == 0)
+                        return x; /* x is integral */
+                    if (i0 > 0)
+                        i0 += (0x00100000) >> j0;
+                    i0 &= (~i);
+                    i1 = 0;
+                }
+            }
+            else if (j0 > 51)
+            {
+                if (j0 == 0x400)
+                    return x + x; /* inf or NaN */
+                else
+                    return x; /* x is integral */
+            }
+            else
+            {
+                i = ((std::uint32_t)(0xffffffff)) >> (j0 - 20);
+                if ((i1 & i) == 0)
+                    return x; /* x is integral */
+                if (i0 > 0)
+                    i1 += (0x40000000) >> (j0 - 20);
+                i1 &= (~i);
+            }
+            SET_HIGH_WORD(x, static_cast<std::uint32_t>(i0));
+            SET_LOW_WORD(x, static_cast<std::uint32_t>(i1));
+            return x;
+        }
 
         /*
          * __kernel_rem_pio2(x,y,e0,nx,prec,ipio2)
@@ -268,8 +371,8 @@ namespace xsimd
             }
 
             /* compute n */
-            z = std::scalbn(z, q0); /* actual value of z */
-            z -= 8.0 * std::floor(z * 0.125); /* trim off integer >= 8 */
+            z = rem_pio2_scalbn(z, q0); /* actual value of z */
+            z -= 8.0 * rem_pio2_floor(z * 0.125); /* trim off integer >= 8 */
             n = (int32_t)z;
             z -= (double)n;
             ih = 0;
@@ -319,7 +422,7 @@ namespace xsimd
                 {
                     z = one - z;
                     if (carry != 0)
-                        z -= std::scalbn(one, q0);
+                        z -= rem_pio2_scalbn(one, q0);
                 }
             }
 
@@ -359,7 +462,7 @@ namespace xsimd
             }
             else
             { /* break z into 24-bit if necessary */
-                z = std::scalbn(z, -q0);
+                z = rem_pio2_scalbn(z, -q0);
                 if (z >= two24)
                 {
                     fw = (double)((int32_t)(twon24 * z));
@@ -373,7 +476,7 @@ namespace xsimd
             }
 
             /* convert integer "bit" chunk to floating-point value */
-            fw = scalbn(one, q0);
+            fw = rem_pio2_scalbn(one, q0);
             for (i = jz; i >= 0; i--)
             {
                 q[i] = fw * (double)iq[i];
@@ -619,7 +722,7 @@ namespace xsimd
             }
             if (ix <= 0x413921fb)
             { /* |x| ~<= 2^19*(pi/2), medium_ size */
-                t = std::fabs(x);
+                t = bit_cast<double>(bit_cast<uint64_t>(x) & ~(1ull << 63));
                 n = (std::int32_t)(t * invpio2 + half);
                 fn = (double)n;
                 r = t - fn * pio2_1;
@@ -705,3 +808,5 @@ namespace xsimd
 #undef LOW_WORD_IDX
 #undef ONCE0
 }
+
+#endif

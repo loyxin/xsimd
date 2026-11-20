@@ -37,6 +37,10 @@ namespace xsimd
 
 // This include must come last
 #include "./types/xsimd_api.hpp"
+
+// Scalar math entry points, built on top of the batch API; must come
+// after xsimd_api.hpp.
+#include "./arch/xsimd_scalar_math.hpp"
 #endif // XSIMD_NO_SUPPORTED_ARCHITECTURE
 
 #endif

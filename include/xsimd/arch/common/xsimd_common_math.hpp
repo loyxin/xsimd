@@ -1673,7 +1673,7 @@ namespace xsimd
         template <class A, class T>
         XSIMD_INLINE batch<std::complex<T>, A> log2(batch<std::complex<T>, A> const& self, requires_arch<common>) noexcept
         {
-            return detail::logN_complex_impl(self, std::log(2));
+            return detail::logN_complex_impl(self, T(0.693147180559945309417232121458176568));
         }
 
         // log10
@@ -1804,7 +1804,7 @@ namespace xsimd
         template <class A, class T>
         XSIMD_INLINE batch<std::complex<T>, A> log10(const batch<std::complex<T>, A>& z, requires_arch<common>) noexcept
         {
-            return detail::logN_complex_impl(z, std::log(10));
+            return detail::logN_complex_impl(z, T(2.30258509299404568401799145468436421));
         }
 
         // log1p
@@ -1891,11 +1891,22 @@ namespace xsimd
             using real_batch = typename batch_type::real_batch;
             batch_type u = 1 + self;
             batch_type logu = log(u);
+            batch_type num = logu * self;
+            kernel::detail::reassociation_barrier(num, "complex log1p numerator");
+            batch_type den = u - batch_type(1.);
+            kernel::detail::reassociation_barrier(den, "complex log1p denominator");
+            // component-wise division with explicit fused ops, so the
+            // contraction shape cannot depend on the surrounding context
+            real_batch c = den.real(), d = den.imag();
+            real_batch e = fma(d, d, c * c);
+            real_batch res_re = (fma(d, num.imag(), c * num.real())) / e;
+            real_batch res_im = (fms(c, num.imag(), d * num.real())) / e;
+            batch_type res(res_re, res_im);
             return select(u == batch_type(1.),
                           self,
                           select(u.real() <= real_batch(0.),
                                  logu,
-                                 logu * self / (u - batch_type(1.))));
+                                 res));
         }
 
         // mod
@@ -1947,13 +1958,35 @@ namespace xsimd
         }
 
         // nearbyint_as_int
+        namespace detail
+        {
+            // libm-free round-half-to-even, matching std::nearbyintf /
+            // std::nearbyint under the default rounding mode.
+            inline float nearbyint_libm_free(float v) noexcept
+            {
+                float a = v < 0.f ? -v : v;
+                if (a >= 8388608.f) // >= 2^23: already integral
+                    return v;
+                float r = (a + 8388608.f) - 8388608.f; // round half to even
+                return v < 0.f ? -r : r;
+            }
+
+            inline double nearbyint_libm_free(double v) noexcept
+            {
+                double a = v < 0. ? -v : v;
+                if (a >= 4503599627370496.) // >= 2^52: already integral
+                    return v;
+                double r = (a + 4503599627370496.) - 4503599627370496.;
+                return v < 0. ? -r : r;
+            }
+        }
         template <class A>
         XSIMD_INLINE batch<as_integer_t<float>, A>
         nearbyint_as_int(batch<float, A> const& self, requires_arch<common>) noexcept
         {
             using U = as_integer_t<float>;
             return kernel::detail::apply_transform<U>([](float x) noexcept -> U
-                                                      { return std::nearbyintf(x); },
+                                                      { return static_cast<U>(detail::nearbyint_libm_free(x)); },
                                                       self);
         }
 
@@ -1963,7 +1996,7 @@ namespace xsimd
         {
             using U = as_integer_t<double>;
             return kernel::detail::apply_transform<U>([](double x) noexcept -> U
-                                                      { return std::nearbyint(x); },
+                                                      { return static_cast<U>(detail::nearbyint_libm_free(x)); },
                                                       self);
         }
 

@@ -237,6 +237,8 @@ endif()
 add_subdirectory(doc)
 add_subdirectory(architectures)
 
+add_subdirectory(scalar)
+
 if(EMULATED_COMPILE_FLAGS)
     message(STATUS ${EMULATED_COMPILE_FLAGS})
     target_compile_options(test_xsimd PRIVATE ${EMULATED_COMPILE_FLAGS})
